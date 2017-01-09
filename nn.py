@@ -3,6 +3,7 @@ import numpy as np
 from typing import Tuple
 from tqdm import tqdm, trange
 from training_data import TrainingData
+from termcolor import colored
 
 class NN:
     @staticmethod
@@ -65,6 +66,8 @@ class NN:
         self.batch_size = batch_size
         self.input_shape = input_shape
 
+        print(colored('[Building graph]', 'cyan'), 'start building...')
+
         # The place holder of input (feed from here...)
         # Dim = batch_size × V1 × V2 ...
         self.input_ph = tf.placeholder(
@@ -115,9 +118,9 @@ class NN:
         self.target_action_ph = tf.placeholder(tf.int32, shape=(batch_size,))
         self.target_value_ph = tf.placeholder(tf.float32, shape=(batch_size,))
         target_action_one_hot = tf.one_hot(self.target_action_ph, depth=action_n, dtype=tf.float32)
-        output_mult_mask = tf.reduced_sum(self.output * target_action_one_hot, 1)
+        output_mult_mask = tf.reduce_sum(self.output * target_action_one_hot, 1)
         self.loss = tf.nn.l2_loss(output_mult_mask - self.target_value_ph, name="l2_loss")
-        self.eta_ph = tf.placeholder(tf.float32, shape=(1,))
+        self.eta_ph = tf.placeholder(tf.float32, shape=[])
 
         optimizer = tf.train.RMSPropOptimizer(
             learning_rate=self.eta_ph,
@@ -125,6 +128,12 @@ class NN:
         )
 
         self.train_op = optimizer.minimize(self.loss)
+
+        print(colored('[Building graph]', 'cyan'), 'Graph build:')
+        print(colored('[Summary]', 'green'), ' → '.join(
+            '(' + '×'.join(str(x) for x in ly.get_shape()) + ')' for ly in hidden_layers
+        ))
+
 
         self.initialize()
 
@@ -139,23 +148,28 @@ class NN:
               training_data: TrainingData,
               epoch: int,
               eta: float):
+
+        print(colored('[NNet Training]', 'cyan'), f'Start NN training..., η = {eta:.4f}')
+
         data_n = training_data.n
 
-        tbar = trange(epoch)
-        for i in tbar:
-            loss_tot = 0.
-            for batch in tqdm(training_data, total=len(training_data)):
-                feed_dict = {
-                    self.input_ph: batch[0],
-                    self.target_action_ph: batch[1],
-                    self.target_value_ph: batch[2],
-                    self.eta_ph: eta,
-                }
-                _, loss_value = self.session.run([self.train_op, self.loss], feed_dict=feed_dict)
-                loss_tot += loss_value
+        with tqdm(total=epoch*len(training_data)) as tbar:
+            for i in range(epoch):
+                loss_tot = 0.
+                for batch in training_data:
+                    feed_dict = {
+                        self.input_ph: batch[0],
+                        self.target_action_ph: batch[1],
+                        self.target_value_ph: batch[2],
+                        self.eta_ph: eta,
+                    }
+                    _, loss_value = self.session.run([self.train_op, self.loss], feed_dict=feed_dict)
+                    loss_tot += loss_value
+                    tbar.update(1)
 
-            if i % 4 == 0 or i == epoch-1:
-                print("Epoch = #%d, loss = %.4f" % (i, loss_tot/training_data.real_n))
+                if i % 4 == 0 or i == epoch-1:
+                    tbar.write(colored(f"Epoch {i:2}: ", 'green') + f'loss = {loss_tot/training_data.real_n:.4f}')
+                    tbar.update(0)
 
     def _feed(self, input_dt: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         '''Private function for feeding an input.
@@ -174,7 +188,7 @@ class NN:
         feed_dict = {
             self.input_ph: input_dt
         }
-        res = self.session.run([self.output_action, self.output], feed_dict=feed_dict)[0]
+        res = self.session.run([self.output_action, self.output], feed_dict=feed_dict)
         return (res[0][:input_n], res[1][:input_n])
 
     def feed(self, input_dt) -> Tuple[np.ndarray, np.ndarray]:
@@ -194,8 +208,7 @@ class NN:
         n = input_dt.shape[0]
 
         res = tuple(zip(
-            self._feed(input_dt[s : s+self.batch_size])
-            for s in range(0, n, self.batch_size)
+            *(self._feed(input_dt[s : s+self.batch_size])
+              for s in range(0, n, self.batch_size))
         ))
-
         return (np.concatenate(res[0]), np.concatenate(res[1]))

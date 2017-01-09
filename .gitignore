@@ -1,1 +1,4 @@
 __pycache__/
+envs/
+nnet_qlearner.py
+cnnet.py
