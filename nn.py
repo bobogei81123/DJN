@@ -12,7 +12,7 @@ class NN:
             window_shape,
             output_dim: int,
             strides,
-            use_maxpool: bool = False,
+            use_maxpool: bool = True,
         ):
         '''
         input_ph: the input variable
@@ -50,6 +50,24 @@ class NN:
 
         b = tf.Variable(tf.zeros(shape=[output_dim]), name='b')
         output = tf.nn.relu(tf.matmul(input_ph, W) + b)
+        return output
+
+    @staticmethod
+    def Linear_layer(
+            input_ph,
+            output_dim: int,
+        ):
+        # The dim of input is batch_size × input_w
+        input_w = input_ph.get_shape()[1].value
+
+        W = tf.Variable(
+            tf.truncated_normal((input_w, output_dim),
+                                stddev=1.0/np.sqrt(input_w+output_dim)),
+            name='W'
+        )
+
+        b = tf.Variable(tf.zeros(shape=[output_dim]), name='b')
+        output = tf.matmul(input_ph, W) + b
         return output
 
     def __init__(self,
@@ -107,7 +125,7 @@ class NN:
             ))
 
         with tf.variable_scope('output'):
-            hidden_layers.append(self.ReLu_layer(
+            hidden_layers.append(self.Linear_layer(
                 hidden_layers[-1], # input var
                 action_n, # output dim
             ))

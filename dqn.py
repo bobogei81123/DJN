@@ -6,6 +6,8 @@ from training_data import TrainingData
 from os import path
 from typing import Any, Tuple, List
 from termcolor import colored
+import tensorflow as tf
+from datetime import datetime
 
 Action = int
 Reward = float
@@ -13,6 +15,9 @@ Observation = np.ndarray
 
 # Experience := (obs_now, action, reward, obs_next)
 Experience = NamedTuple('Experience', ['obs', 'action', 'reward', 'obs_next'])
+
+def make_simple_summary(tag, value):
+    return tf.Summary(value=[tf.Summary.Value(tag=tag, simple_value=value)])
 
 class DQN:
 
@@ -54,16 +59,17 @@ class DQN:
         eta: Learning rate
         eta_decay: Learning rate decay per episode
         batch_size:
-        save_dir: Dir name to save model (save at model/{save_dir})
+        save_dir: Dir name to save model (save at {save_dir}/datestring)
         '''
 
         self.env = env
-        self.save_path = path.join('model', save_dir)
+        self.save_dir = path.join(save_dir, datetime.now().strftime('%Y%m%d%H%M%S'))
+        self.model_save_dir = path.join(self.save_dir, 'model')
+        self.summary_save_dir = path.join(self.save_dir, 'summary')
 
         self.obs_shape = env.observation_space.shape
         self.action_n = env.action_space.n
         self.max_step = max_step
-
 
         self.gamma = gamma
         self.epsilon = epsilon
@@ -85,6 +91,9 @@ class DQN:
         self.history = [] # type: List[Experience]
 
         self.nn = NN(self.obs_shape, self.action_n, batch_size)
+
+        self.summary = tf.summary.FileWriter(self.summary_save_dir)
+        self.global_step = 0
 
     def get_action(self,
                    obs,
@@ -110,6 +119,14 @@ class DQN:
         act_value, _ = self.nn.feed(obs)
         return act_value
 
+    def add_summary(self, tag, value, global_step=None):
+        if global_step is None: global_step = self.global_step
+        self.summary.add_summary(
+            make_simple_summary(tag, value),
+            global_step=global_step,
+        )
+
+
     def start_training(self,
                        reward_target=1e9) -> None:
         iter_n = 0
@@ -126,6 +143,9 @@ class DQN:
                 self.history.extend(history)
 
             reward_avg /= self.update_episode_n
+            self.add_summary('reward', reward_avg)
+            self.add_summary('eta', self.eta)
+            self.add_summary('epsilon', self.epsilon)
             print(f'Played {self.update_episode_n} episodes,',
                   colored(f'R_avg = {reward_avg:.4f}', 'red', attrs=['bold']))
             self.update()
@@ -139,6 +159,7 @@ class DQN:
                 for i in range(test_n):
                     reward_avg += self.start_episode(False)[0]
                 reward_avg /= test_n
+                self.add_summary('reward_val', reward_avg)
                 print(colored('[Validation result]', 'blue', attrs=['bold']),
                       colored(f'R_avg = {reward_avg:.4f}', 'red', attrs=['bold']))
 
@@ -147,6 +168,8 @@ class DQN:
                 # Return if the target is reached
                 if reward_avg >= reward_target:
                     return
+
+            self.summary.flush()
 
             self.epsilon = max(self.epsilon_min,
                                self.epsilon - self.epsilon_decay)
@@ -160,6 +183,10 @@ class DQN:
         reward_tot = 0.
 
         for step in range(self.max_step):
+            # Small hack to decide if training or not
+            if use_epsilon:
+                self.global_step += 1
+
             action = self.get_action(obs, use_epsilon)
             obs_next, reward, done, info = self.env.step(action)
             history.append(Experience(obs, action, reward, None if done else obs_next))
@@ -205,20 +232,20 @@ class DQN:
 if __name__ == '__main__':
     from envs.eat_bullet.eat_bullet import EatBulletEnv
 
-    env = EatBulletEnv(grid_size=(5, 5), food_n=1)
+    env = EatBulletEnv(grid_size=(10, 10), food_n=10)
     dqn = DQN(env=env,
-              max_step=500,
+              max_step=200,
 
-              gamma=0.95,
-              epsilon=0.95,
+              gamma=0.97,
+              epsilon=1.0,
               # epsilon_min,
-              # epsilon_decay,
-              update_episode_n=4,
+              epsilon_decay=0.02,
+              update_episode_n=20,
 
-              history_max_n=100000,
-              nnet_epoch=20,
+              history_max_n=50000,
+              nnet_epoch=5,
               eta=2e-4,
-              eta_decay=1.0,
+              eta_decay=0.999,
               batch_size=20,
               save_dir='eatbullet'
               )

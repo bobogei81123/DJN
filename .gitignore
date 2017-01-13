@@ -1,4 +1,5 @@
 __pycache__/
 envs/
+eatbullet/
 nnet_qlearner.py
 cnnet.py
