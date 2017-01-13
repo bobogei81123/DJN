@@ -45,7 +45,7 @@ class NN:
         W = tf.Variable(
             tf.truncated_normal((input_w, output_dim),
                                 stddev=1.0/np.sqrt(input_w+output_dim)),
-            name='W'
+            name='W',
         )
 
         b = tf.Variable(tf.zeros(shape=[output_dim]), name='b')
@@ -63,7 +63,7 @@ class NN:
         W = tf.Variable(
             tf.truncated_normal((input_w, output_dim),
                                 stddev=1.0/np.sqrt(input_w+output_dim)),
-            name='W'
+            name='W',
         )
 
         b = tf.Variable(tf.zeros(shape=[output_dim]), name='b')

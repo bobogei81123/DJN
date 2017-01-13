@@ -16,7 +16,7 @@ Observation = np.ndarray
 # Experience := (obs_now, action, reward, obs_next)
 Experience = NamedTuple('Experience', ['obs', 'action', 'reward', 'obs_next'])
 
-def make_simple_summary(tag, value):
+def make_simple_summary(tag: str, value: float):
     return tf.Summary(value=[tf.Summary.Value(tag=tag, simple_value=value)])
 
 class DQN:
@@ -96,7 +96,7 @@ class DQN:
         self.global_step = 0
 
     def get_action(self,
-                   obs,
+                   obs: Observation,
                    use_epsilon: bool=True) -> Action:
 
         if use_epsilon:
@@ -105,7 +105,7 @@ class DQN:
             return self._epsilon_greedy(obs, self.epsilon_min)
 
     def _epsilon_greedy(self,
-                        obs,
+                        obs: Observation,
                         eps: float) -> Action:
         r = np.random.random()
 
@@ -115,11 +115,14 @@ class DQN:
             return self._best_action(obs)
 
     def _best_action(self,
-                     obs) -> Action:
+                     obs: Observation) -> Action:
         act_value, _ = self.nn.feed(obs)
         return act_value
 
-    def add_summary(self, tag, value, global_step=None):
+    def add_summary(self,
+                    tag: str,
+                    value: float,
+                    global_step: int=None):
         if global_step is None: global_step = self.global_step
         self.summary.add_summary(
             make_simple_summary(tag, value),
@@ -128,7 +131,7 @@ class DQN:
 
 
     def start_training(self,
-                       reward_target=1e9) -> None:
+                       reward_target: float=1e9) -> None:
         iter_n = 0
         while True:
             #Training
@@ -227,30 +230,3 @@ class DQN:
         data = TrainingData(obs_arr, action_arr, target_arr, self.batch_size)
         # real_epoch = int(self.nnet_epoch * self.history_max_n / len(inp_arr))
         self.nn.train(data, self.nnet_epoch, self.eta)
-
-
-if __name__ == '__main__':
-    from envs.eat_bullet.eat_bullet import EatBulletEnv
-
-    env = EatBulletEnv(grid_size=(10, 10), food_n=10)
-    dqn = DQN(env=env,
-              max_step=200,
-
-              gamma=0.97,
-              epsilon=1.0,
-              # epsilon_min,
-              epsilon_decay=0.02,
-              update_episode_n=20,
-
-              history_max_n=50000,
-              nnet_epoch=5,
-              eta=2e-4,
-              eta_decay=0.999,
-              batch_size=20,
-              save_dir='eatbullet'
-              )
-
-    dqn.start_training()
-
-
-
